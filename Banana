@@ -1,0 +1,634 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- Các dịch vụ game
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
+local VirtualUser = game:GetService("VirtualUser")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local CollectionService = game:GetService("CollectionService")
+
+-- Người chơi local
+local Player = Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local RootPart = Character:WaitForChild("HumanoidRootPart")
+
+-- Biến trạng thái toàn cục
+local State = {
+    -- Auto Farm
+    AutoFarm = false,
+    AutoKitsune = false,
+    AutoBone = false,
+    AutoQuest = false,
+    FarmTarget = "Mobs",
+    SelectedIsland = "Jungle",
+    
+    -- Sea Event
+    AutoSeaEvent = false,
+    SeaEventType = "All",
+    
+    -- V4
+    AutoV4 = false,
+    V4Step = 1,
+    
+    -- Volcano
+    AutoVolcano = false,
+    
+    -- ESP
+    ESP = false,
+    ESPType = "All",
+    
+    -- Misc
+    SpeedHack = false,
+    Flight = false,
+    AntiAFK = false,
+    FruitNotifier = false,
+    AutoStats = false,
+    SelectedStat = "Melee",
+    SpeedValue = 50,
+    
+    -- Menus
+    MenuVisible = true
+}
+
+-- Biến cho ESP
+local espObjects = {}
+
+-- ============================================
+-- PHẦN 2: HÀM TIỆN ÍCH (Teleport, Attack, ESP)
+-- ============================================
+
+-- Hàm Teleport đến vị trí
+local function TeleportTo(Position)
+    if RootPart then
+        RootPart.CFrame = CFrame.new(Position)
+        task.wait(0.05)
+    end
+end
+
+-- Hàm Teleport đến đảo (dựa trên tên)
+local function TeleportToIsland(IslandName)
+    local IslandPositions = {
+        -- Sea 1
+        Jungle = Vector3.new(-1222, 80, 1140),
+        ["Pirate Village"] = Vector3.new(-1180, 12, 2850),
+        Desert = Vector3.new(1005, 100, 1000),
+        Snow = Vector3.new(1470, 42, 47),
+        ["Marine Fortress"] = Vector3.new(2900, 10, -2200),
+        ["Sky Island"] = Vector3.new(-4840, 650, -590),
+        Colosseum = Vector3.new(-1475, 10, -395),
+        ["Green Zone"] = Vector3.new(-1995, 27, 100),
+        Graveyard = Vector3.new(-2160, 40, -250),
+        ["Ice Castle"] = Vector3.new(4900, 300, -4950),
+        ["Hot and Cold"] = Vector3.new(6050, 10, -150),
+        Cafe = Vector3.new(-590, 80, -2750),
+        
+        -- Sea 2
+        ["Kingdom of Rose"] = Vector3.new(-8550, 100, 5550),
+        ["Sea of Treats"] = Vector3.new(-12400, 10, 10800),
+        
+        -- Sea 3 + Đặc biệt
+        ["Kitsune Island"] = Vector3.new(-14500, 150, 12500),
+        ["Haunted Castle"] = Vector3.new(-11500, 200, 9800),
+        ["Great Tree"] = Vector3.new(-2250, 180, -11000),
+        ["Floating Turtle"] = Vector3.new(-12500, 250, 12500),
+    }
+    
+    local pos = IslandPositions[IslandName]
+    if pos then
+        TeleportTo(pos)
+        Rayfield:Notify({
+            Title = "✨ Teleport",
+            Content = "Đã đến " .. IslandName,
+            Duration = 2
+        })
+    else
+        Rayfield:Notify({
+            Title = "⚠️ Lỗi",
+            Content = "Không tìm thấy tọa độ: " .. IslandName,
+            Duration = 2
+        })
+    end
+end
+
+-- Hàm tìm quái vật gần nhất (Mobs thường)
+local function GetNearestMob()
+    local nearest = nil
+    local minDist = math.huge
+    
+    for _, mob in pairs(Workspace.Enemies:GetChildren()) do
+        if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 then
+            local hrp = mob:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local dist = (RootPart.Position - hrp.Position).Magnitude
+                if dist < minDist and dist < 400 then
+                    minDist = dist
+                    nearest = mob
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+-- Hàm tìm Kitsune (quái vật đặc biệt ở Kitsune Island)
+local function GetNearestKitsune()
+    local nearest = nil
+    local minDist = math.huge
+    
+    for _, mob in pairs(Workspace.Enemies:GetChildren()) do
+        local name = mob.Name:lower()
+        if name:find("kitsune") or name:find("fox") or name:find("nine") then
+            if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 then
+                local hrp = mob:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local dist = (RootPart.Position - hrp.Position).Magnitude
+                    if dist < minDist then
+                        minDist = dist
+                        nearest = mob
+                    end
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+-- Hàm tìm quái vật farm Bone (Halloween)
+local function GetNearestBoneMob()
+    local nearest = nil
+    local minDist = math.huge
+    
+    for _, mob in pairs(Workspace.Enemies:GetChildren()) do
+        local name = mob.Name:lower()
+        if name:find("skeleton") or name:find("ghost") or name:find("pumpkin") or name:find("bone") then
+            if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 then
+                local hrp = mob:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local dist = (RootPart.Position - hrp.Position).Magnitude
+                    if dist < minDist then
+                        minDist = dist
+                        nearest = mob
+                    end
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+-- Hàm tấn công quái vật
+local function AttackMob(mob)
+    if mob and mob:FindFirstChild("HumanoidRootPart") then
+        local args = {[1] = mob}
+        local success, err = pcall(function()
+            ReplicatedStorage.Remotes.CommF_:InvokeServer("Server", "Attack", args)
+        end)
+        if not success then
+            -- Thử cách khác nếu remote khác
+            pcall(function()
+                ReplicatedStorage.Remotes.Comm_:InvokeServer("Attack", mob)
+            end)
+        end
+    end
+end
+
+-- ============================================
+-- PHẦN 3: AUTO FARM (Mobs, Kitsune, Bone)
+-- ============================================
+
+-- 3.1 Auto Farm Mobs thường
+local function AutoFarmMobs()
+    while State.AutoFarm and State.FarmTarget == "Mobs" do
+        local mob = GetNearestMob()
+        if mob then
+            AttackMob(mob)
+        end
+        task.wait(0.1)
+    end
+end
+
+-- 3.2 Auto Farm Kitsune Island (Chuyên sâu)
+local function AutoFarmKitsune()
+    while State.AutoKitsune do
+        -- Kiểm tra nếu chưa ở Kitsune Island thì teleport
+        local kitsuneIslandPos = Vector3.new(-14500, 150, 12500)
+        if (RootPart.Position - kitsuneIslandPos).Magnitude > 500 then
+            TeleportToIsland("Kitsune Island")
+            task.wait(1)
+        end
+        
+        -- Tìm Kitsune
+        local kitsune = GetNearestKitsune()
+        if kitsune then
+            AttackMob(kitsune)
+        else
+            -- Di chuyển vòng quanh đảo để tìm
+            local waypoints = {
+                Vector3.new(-14500, 150, 12500),
+                Vector3.new(-14300, 145, 12700),
+                Vector3.new(-14700, 155, 12300),
+                Vector3.new(-14200, 140, 12400),
+                Vector3.new(-14600, 160, 12600)
+            }
+            for _, wp in pairs(waypoints) do
+                TeleportTo(wp)
+                task.wait(0.5)
+            end
+        end
+        task.wait(0.2)
+    end
+end
+
+-- 3.3 Auto Farm Bone (Halloween Event)
+local function AutoFarmBone()
+    while State.AutoBone do
+        -- Teleport đến Haunted Castle nếu cần
+        local hauntedPos = Vector3.new(-11500, 200, 9800)
+        if (RootPart.Position - hauntedPos).Magnitude > 500 then
+            TeleportToIsland("Haunted Castle")
+            task.wait(1)
+        end
+        
+        -- Tìm quái vật farm Bone
+        local boneMob = GetNearestBoneMob()
+        if boneMob then
+            AttackMob(boneMob)
+        else
+            -- Di chuyển quanh Haunted Castle
+            TeleportTo(hauntedPos)
+        end
+        task.wait(0.15)
+    end
+end
+
+-- 3.4 Auto Quest (Nhận và hoàn thành quest tự động)
+local function AutoQuestFunction()
+    while State.AutoQuest do
+        pcall(function()
+            -- Nhận quest từ NPC gần nhất
+            local args = {[1] = "StartQuest", [2] = State.SelectedIsland}
+            ReplicatedStorage.Remotes.CommF_:InvokeServer("Server", "StartQuest", args)
+            
+            -- Check quest completion
+            local args2 = {[1] = "GetQuest"}
+            local quest = ReplicatedStorage.Remotes.CommF_:InvokeServer("Server", "GetQuest", args2)
+            
+            if quest and quest.Completed then
+                local args3 = {[1] = "ClaimQuest"}
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("Server", "ClaimQuest", args3)
+            end
+        end)
+        task.wait(10)
+    end
+end
+
+-- ============================================
+-- PHẦN 4: SEA EVENT (Ship Raid, Sea Beast, Terror Shark)
+-- ============================================
+
+-- Tìm Sea Beast
+local function FindSeaBeast()
+    for _, obj in pairs(Workspace:GetChildren()) do
+        local name = obj.Name:lower()
+        if name:find("seabeast") or name:find("sea beast") or obj:FindFirstChild("SeaBeast") then
+            return obj
+        end
+    end
+    return nil
+end
+
+-- Tìm Ship Raid
+local function FindShipRaid()
+    for _, obj in pairs(Workspace:GetChildren()) do
+        local name = obj.Name:lower()
+        if (name:find("ship") or name:find("boat")) and obj:FindFirstChild("Humanoid") then
+            return obj
+        end
+    end
+    return nil
+end
+
+-- Tìm Terror Shark
+local function FindTerrorShark()
+    for _, obj in pairs(Workspace:GetChildren()) do
+        local name = obj.Name:lower()
+        if name:find("terror") or name:find("shark") then
+            return obj
+        end
+    end
+    return nil
+end
+
+-- Auto Sea Event chính
+local function AutoSeaEventFunction()
+    while State.AutoSeaEvent do
+        local target = nil
+        
+        if State.SeaEventType == "Sea Beast" or State.SeaEventType == "All" then
+            target = FindSeaBeast()
+        end
+        
+        if not target and (State.SeaEventType == "Ship Raid" or State.SeaEventType == "All") then
+            target = FindShipRaid()
+        end
+        
+        if not target and (State.SeaEventType == "Terror Shark" or State.SeaEventType == "All") then
+            target = FindTerrorShark()
+        end
+        
+        if target and target:FindFirstChild("HumanoidRootPart") then
+            AttackMob(target)
+            TeleportTo(target.HumanoidRootPart.Position + Vector3.new(0, 15, 0))
+        end
+        
+        task.wait(0.3)
+    end
+end
+
+-- ============================================
+-- PHẦN 5: TAB UP V4 (Fragment, Gear, Mirror Fractal, Trail)
+-- ============================================
+
+-- Vị trí các Gear V4
+local GearLocations = {
+    Spikey = Vector3.new(-12500, 50, 10500),
+    Blue = Vector3.new(-8550, 100, 5550),
+    Red = Vector3.new(4900, 300, -4950),
+    Green = Vector3.new(-1995, 27, 100),
+}
+
+-- Vị trí Mirror Fractal
+local MirrorFractalPos = Vector3.new(-12400, 10, 10800)
+
+-- Auto V4 Helper
+local function AutoV4Function()
+    while State.AutoV4 do
+        if State.V4Step == 1 then
+            -- Step 1: Farm Fragment từ Elite Mobs
+            for _, mob in pairs(Workspace.Enemies:GetChildren()) do
+                local name = mob.Name:lower()
+                if name:find("elite") and mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 then
+                    AttackMob(mob)
+                    task.wait(0.3)
+                end
+            end
+            
+        elseif State.V4Step == 2 then
+            -- Step 2: Auto lấy Gear
+            for gearName, gearPos in pairs(GearLocations) do
+                TeleportTo(gearPos)
+                task.wait(1)
+                -- Tương tác để lấy gear
+                pcall(function()
+                    local args = {[1] = "GetGear", [2] = gearName}
+                    ReplicatedStorage.Remotes.CommF_:InvokeServer("Server", "GetGear", args)
+                end)
+                task.wait(2)
+            end
+            
+        elseif State.V4Step == 3 then
+            -- Step 3: Mirror Fractal
+            TeleportTo(MirrorFractalPos)
+            task.wait(1)
+            pcall(function()
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("Server", "MirrorFractal", {})
+            end)
+            task.wait(5)
+            
+        elseif State.V4Step == 4 then
+            -- Step 4: Trail và Awakening
+            pcall(function()
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("Server", "StartTrail", {})
+                task.wait(10)
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("Server", "AwakenV4", {})
+            end)
+        end
+        
+        task.wait(2)
+    end
+end
+
+-- ============================================
+-- PHẦN 6: VOLCANO EVENT & MISC
+-- ============================================
+
+-- Volcano Event (Magma Admiral)
+local function AutoVolcanoFunction()
+    while State.AutoVolcano do
+        -- Teleport đến Volcano
+        TeleportTo(Vector3.new(1000, 100, 1500))
+        task.wait(1)
+        
+        -- Tìm Magma Admiral
+        for _, obj in pairs(Workspace:GetChildren()) do
+            local name = obj.Name:lower()
+            if name:find("magma") or name:find("admiral") then
+                if obj:FindFirstChild("HumanoidRootPart") then
+                    AttackMob(obj)
+                    TeleportTo(obj.HumanoidRootPart.Position)
+                end
+            end
+        end
+        task.wait(0.5)
+    end
+end
+
+-- Speed Hack
+local function SpeedHackFunction()
+    while State.SpeedHack do
+        if Humanoid then
+            Humanoid.WalkSpeed = State.SpeedValue
+        end
+        task.wait(0.5)
+    end
+    if not State.SpeedHack and Humanoid then
+        Humanoid.WalkSpeed = 16
+    end
+end
+
+-- Flight (Bay)
+local function FlightFunction()
+    while State.Flight do
+        if RootPart then
+            local args = {[1] = "Fly", [2] = true}
+            pcall(function()
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("Server", "Fly", args)
+            end)
+            RootPart.Velocity = Vector3.new(0, 0, 0)
+        end
+        task.wait(0.1)
+    end
+end
+
+-- Anti AFK
+local function AntiAFKFunction()
+    while State.AntiAFK do
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton(Vector2.new(0, 0))
+        end)
+        task.wait(60)
+    end
+end
+
+-- Kill All Mobs (Xóa hết quái vật)
+local function KillAllMobs()
+    for _, mob in pairs(Workspace.Enemies:GetChildren()) do
+        if mob:FindFirstChild("Humanoid") then
+            mob.Humanoid.Health = 0
+        end
+    end
+    Rayfield:Notify({
+        Title = "💀 Kill All",
+        Content = "Đã tiêu diệt tất cả quái vật!",
+        Duration = 2
+    })
+end
+
+-- ESP (Nhìn xuyên tường, hiển thị vị trí)
+local function CreateESP()
+    while State.ESP do
+        -- Xóa ESP cũ
+        for _, v in pairs(espObjects) do
+            pcall(function() v:Destroy() end)
+        end
+        espObjects = {}
+        
+        -- Tạo ESP cho quái vật
+        if State.ESPType == "Mobs" or State.ESPType == "All" then
+            for _, mob in pairs(Workspace.Enemies:GetChildren()) do
+                if mob:FindFirstChild("HumanoidRootPart") then
+                    local billboard = Instance.new("BillboardGui")
+                    billboard.Size = UDim2.new(0, 100, 0, 40)
+                    billboard.StudsOffset = Vector3.new(0, 3, 0)
+                    billboard.AlwaysOnTop = true
+                    billboard.Parent = mob.HumanoidRootPart
+                    
+                    local label = Instance.new("TextLabel")
+                    label.Size = UDim2.new(1, 0, 1, 0)
+                    label.BackgroundTransparency = 1
+                    label.Text = "🐱 " .. mob.Name
+                    label.TextColor3 = Color3.fromRGB(255, 100, 100)
+                    label.TextStrokeTransparency = 0.3
+                    label.TextScaled = true
+                    label.Parent = billboard
+                    
+                    table.insert(espObjects, billboard)
+                end
+            end
+        end
+        
+        -- Tạo ESP cho Fruit
+        if State.ESPType == "Fruits" or State.ESPType == "All" then
+            for _, fruit in pairs(Workspace:GetChildren()) do
+                if fruit.Name:find("Fruit") or fruit:FindFirstChild("Fruit") then
+                    local billboard = Instance.new("BillboardGui")
+                    billboard.Size = UDim2.new(0, 80, 0, 30)
+                    billboard.StudsOffset = Vector3.new(0, 2, 0)
+                    billboard.AlwaysOnTop = true
+                    billboard.Parent = fruit
+                    
+                    local label = Instance.new("TextLabel")
+                    label.Size = UDim2.new(1, 0, 1, 0)
+                    label.BackgroundTransparency = 1
+                    label.Text = "🍎 " .. fruit.Name
+                    label.TextColor3 = Color3.fromRGB(100, 255, 100)
+                    label.TextScaled = true
+                    label.Parent = billboard
+                    
+                    table.insert(espObjects, billboard)
+                end
+            end
+        end
+        
+        task.wait(0.5)
+    end
+    
+    -- Xóa ESP khi tắt
+    for _, v in pairs(espObjects) do
+        pcall(function() v:Destroy() end)
+    end
+    espObjects = {}
+end
+
+-- ============================================
+-- PHẦN 7: GIAO DIỆN MENU + KEYBIND
+-- ============================================
+
+-- 7.1 Tạo cửa sổ chính
+local Window = Rayfield:CreateWindow({
+    Name = "🍌 BANANA CAT HUB",
+    Icon = 101216635028204,
+    LoadingTitle = "Banana Cat Hub ",
+    LoadingSubtitle = "Ultimate Blox Fruits Script",
+    Theme = "Amethyst",  -- Theme: Amethyst, Crimson, Aquamarine, Emerald
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "BananaCatHub",
+        FileName = "BloxFruitsV6"
+    },
+    KeySystem = true,  -- Bật lên nếu muốn có key
+    KeySettings = {
+        Title = "Banana Cat Hub",
+        Subtitle = "Key System",
+        Note = "Join Discord để lấy key",
+        FileName = "BananaKey",
+        SaveKey = true,
+        Key = {"Kazutogaming"}
+    }
+})
+
+-- 7.2 TAB 1: MAIN FARM
+local MainTab = Window:CreateTab("⚔️ MAIN FARM", "rbxassetid://1234567890")
+
+MainTab:CreateSection("🤖 AUTO FARM SETTINGS")
+
+-- Dropdown chọn loại farm
+MainTab:CreateDropdown({
+    Name = "🎯 Chọn mục tiêu farm",
+    Options = {"Mobs (Quái vật)", "Boss", "Kitsune", "Bone"},
+    CurrentOption = "Mobs (Quái vật)",
+    Flag = "FarmTarget",
+    Callback = function(opt)
+        if opt == "Mobs (Quái vật)" then
+            State.FarmTarget = "Mobs"
+        elseif opt == "Boss" then
+            State.FarmTarget = "Boss"
+        elseif opt == "Kitsune" then
+            State.FarmTarget = "Kitsune"
+        elseif opt == "Bone" then
+            State.FarmTarget = "Bone"
+        end
+    end
+})
+
+-- Toggle Auto Farm Mobs
+MainTab:CreateToggle({
+    Name = "🔁 AUTO FARM MOBS",
+    Info = "F1 - Tự động farm quái vật thường",
+    CurrentValue = false,
+    Flag = "AutoFarm",
+    Callback = function(v)
+        State.AutoFarm = v
+        if v then
+            Rayfield:Notify({Title = "Auto Farm", Content = "Đã bắt đầu farm Mobs", Duration = 2})
+            task.spawn(AutoFarmMobs)
+        end
+    end
+})
+
+-- Toggle Auto Farm Kitsune
+MainTab:CreateToggle({
+    Name = "🦊 AUTO FARM KITSUNE",
+    Info = "F2 - Tự động farm Kitsune Island",
+    CurrentValue = false,
+    Flag = "AutoKitsune",
+    Callback = function(v)
+        State.AutoKitsune = v
+        if v then
+            Rayfield:Notify({Title = "Auto Kitsune", Content = "Đã bắt đầu farm
